@@ -2,21 +2,26 @@
 # info: unsuspend mail domains
 # options: USER
 #
-# The function unsuspends all user's MAIL domains.
-
+# example: v-unsuspend-mail-domains admin
+#
+# This function unsuspends all user's MAIL domains.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 user=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -27,6 +32,8 @@ is_format_valid 'user'
 is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -34,9 +41,8 @@ is_object_valid 'user' 'USER' "$user"
 
 # Starting unsuspend loop
 for domain in $(search_objects 'mail' 'SUSPENDED' "yes" 'DOMAIN'); do
-    $BIN/v-unsuspend-mail-domain "$user" "$domain"
+	$BIN/v-unsuspend-mail-domain "$user" "$domain"
 done
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

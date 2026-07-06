@@ -2,58 +2,62 @@
 # info: list supported database types
 # options: [FORMAT]
 #
-# The function for obtaining the list of database types.
-
+# example: v-list-database-types json
+#
+# This function for obtaining the list of database types.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 format=${1-shell}
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 # JSON list function
 json_list() {
-    objects=$(echo "${DB_SYSTEM//,/ }" |wc -w)
-    i=1
-    echo '['
-    for type in ${DB_SYSTEM//,/ }; do
-        echo -n '    "'$type'"'
-        if [ "$i" -lt "$objects" ]; then
-            echo ','
-        else
-            echo
-        fi
-        ((i++))
-    done
-    echo "]"
+	objects=$(echo "${DB_SYSTEM//,/ }" | wc -w)
+	i=1
+	echo '['
+	for type in ${DB_SYSTEM//,/ }; do
+		echo -n '    "'$type'"'
+		if [ "$i" -lt "$objects" ]; then
+			echo ','
+		else
+			echo
+		fi
+		((i++))
+	done
+	echo "]"
 }
 
 # SHELL list function
 shell_list() {
-    echo -e "TYPE\n----"
-    echo "$DB_SYSTEM" |sed -e "s/,/\n/"
+	echo -e "TYPE\n----"
+	echo "$DB_SYSTEM" | sed -e "s/,/\n/"
 }
 
 # PLAIN list function
 plain_list() {
-    for type in ${DB_SYSTEM//,/ }; do
-        echo "$type"
-    done
+	for type in ${DB_SYSTEM//,/ }; do
+		echo "$type"
+	done
 }
 
 # CSV list function
 csv_list() {
-    echo "TYPE"
-    for type in ${DB_SYSTEM//,/ }; do
-        echo "$type"
-    done
+	echo "TYPE"
+	for type in ${DB_SYSTEM//,/ }; do
+		echo "$type"
+	done
 }
-
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -61,12 +65,11 @@ csv_list() {
 
 # Listing data
 case $format in
-    json)   json_list ;;
-    plain)  plain_list ;;
-    csv)    csv_list ;;
-    shell)  shell_list;;
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
 esac
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

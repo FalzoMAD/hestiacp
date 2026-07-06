@@ -1,104 +1,108 @@
 #!/bin/bash
-# info: list web templates
-# options: USER [FORMAT]
+# info: list system themes
+# options: [FORMAT]
 #
-# The function for obtaining the list of themes in the theme
+# example: v-list-sys-themes
+#
+# This function for obtaining the list of themes in the theme
 # library and displaying them in the backend or user interface.
 
-
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 format=${1-shell}
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Define array for available themes
+available_themes=()
+
+# Function to process CSS theme files
+get_themes() {
+	# Retrieve list of system themes
+	if [ -d "$HESTIA_THEMES" ]; then
+		for file in "$HESTIA_THEMES"/*.min.css; do
+			filename=$(basename "$file" .min.css)
+			available_themes+=("${filename%.*}")
+		done
+	fi
+
+	# Check for existence of custom themes folder and iterate through items
+	if [ -d "$HESTIA_THEMES_CUSTOM" ] && [ "$(ls -A "$HESTIA_THEMES_CUSTOM")" ]; then
+		for file in "$HESTIA_THEMES_CUSTOM"/*.css; do
+			filename=$(basename "$file" .css)
+			available_themes+=("${filename%.*}")
+		done
+	fi
+
+	# Sort theme list alphabetically
+	IFS=$'\n' available_themes=($(sort <<< "${available_themes[*]}"))
+	unset IFS
+
+	# Get count of themes (for proper JSON formatting)
+	theme_count="${#available_themes[@]}"
+}
 
 # JSON list function
 json_list() {
-    object1=$(echo "$themes" |wc -w)
-    object2=$(echo "$themes_custom" |wc -w)
-    i=1
-    echo '['
-    for theme in $themes; do
-        if [ "$i" -lt "$object1" ]; then
-            echo -e  "\t\"$theme\","
-        else
-            echo -e  "\t\"$theme\""
-        fi
-        (( ++i))
-    done
-    for custom_theme in $themes_custom; do
-        if [ "$i" -lt "$object2" ]; then
-            echo -e  "\t\"$custom_theme\","
-        else
-            echo -e  "\t\"$custom_theme\""
-        fi
-        (( ++i))
-    done
-    echo "]"
+	i=1
+	echo '['
+	for theme in "${available_themes[@]}"; do
+		if [ "$i" -lt "$theme_count" ]; then
+			echo -e "\t\"$theme\","
+		else
+			echo -e "\t\"$theme\""
+		fi
+		((++i))
+	done
+	echo ']'
 }
 
 # SHELL list function
 shell_list() {
-    echo "THEME"
-    echo "------"
-    for theme in $themes; do
-        echo "$theme"
-    done
-    for custom_theme in $themes_custom; do
-        echo "$custom_theme"
-    done
+	echo "THEME"
+	echo "-----"
+	for theme in "${available_themes[@]}"; do
+		echo "$theme"
+	done
 }
 
 # PLAIN list function
 plain_list() {
-    for theme in $themes; do
-        echo "$theme"
-    done
-    for custom_theme in $themes_custom; do
-        echo "$custom_theme"
-    done
+	for theme in "${available_themes[@]}"; do
+		echo "$theme"
+	done
 }
 
 # CSV list function
 csv_list() {
-    echo "THEME"
-    for theme in $themes; do
-        echo "$theme"
-    done
-    for custom_theme in $themes_custom; do
-        echo "$custom_theme"
-    done
+	echo "THEME"
+	for theme in "${available_themes[@]}"; do
+		echo "$theme"
+	done
 }
-
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Parsing templates
-
-# System provided themes
-themes=$(ls -v $HESTIA_THEMES/)
-themes=$(echo "$themes" | grep '\.css' | sed 's/\.css$//')
-
-# Custom themes
-themes_custom=$(ls -v $HESTIA_THEMES_CUSTOM/)
-themes_custom=$(echo "$themes_custom" | grep '\.css' | sed 's/\.css$//')
-
+get_themes
 
 # Listing data
 case $format in
-    json)   json_list ;;
-    plain)  plain_list ;;
-    csv)    csv_list ;;
-    shell)  shell_list ;;
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
 esac
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

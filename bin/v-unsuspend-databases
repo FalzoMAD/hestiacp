@@ -2,21 +2,24 @@
 # info: unsuspend databases
 # options: USER
 #
-# The function for unsuspending all user's databases.
-
+# This function for unsuspending all user's databases.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 user=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/db.sh
 source $HESTIA/func/db.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -27,6 +30,8 @@ is_format_valid 'user'
 is_system_enabled "$DB_SYSTEM" 'DB_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -34,9 +39,8 @@ is_object_valid 'user' 'USER' "$user"
 
 # Starting unsuspend loop
 for database in $(search_objects 'db' 'SUSPENDED' "yes" 'DB'); do
-    $BIN/v-unsuspend-database "$user" "$database"
+	$BIN/v-unsuspend-database "$user" "$database"
 done
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

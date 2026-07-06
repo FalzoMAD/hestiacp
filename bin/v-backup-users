@@ -2,21 +2,24 @@
 # info: backup all users
 # options: NONE
 #
-# The function backups all system users.
-
+# example: v-backup-users
+#
+# This function backups all system users.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
-
-# Importing system environment  as we run this script
-# mostly by cron which not read it by itself
-source /etc/profile
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -26,31 +29,28 @@ source $HESTIA/conf/hestia.conf
 mysqlrepair --all-databases --check --auto-repair > /dev/null 2>&1
 
 if [ -z "$BACKUP_SYSTEM" ]; then
-    exit
+	exit
 fi
-for user in $($HESTIA/bin/v-list-sys-users plain); do
-    check_suspend=$(grep "SUSPENDED='no'" $HESTIA/data/users/$user/user.conf)
-    log=$HESTIA/log/backup.log
-    if [ ! -f "$HESTIA/data/users/$user/user.conf" ]; then
-        continue;
-    fi
-    check_backup_conditions
-    check_suspend=$(grep "SUSPENDED='no'" $HESTIA/data/users/$user/user.conf)
-    log=$HESTIA/log/backup.log
-    if [ ! -z "$check_suspend" ]; then
-        echo -e "================================" >> $log
-        echo -e "$user" >> $log
-        echo -e "--------------------------------\n" >> $log
-        nice -n 19 ionice -c2 -n7 $BIN/v-backup-user $user >> $log 2>&1
-        echo -e "\n--------------------------------\n\n" >> $log
-    fi
+for user in $("$BIN/v-list-users" list); do
+	check_suspend=$(grep "SUSPENDED='no'" $HESTIA/data/users/$user/user.conf)
+	log=$HESTIA/log/backup.log
+	if [ ! -f "$HESTIA/data/users/$user/user.conf" ]; then
+		continue
+	fi
+	check_backup_conditions
+	check_suspend=$(grep "SUSPENDED='no'" $HESTIA/data/users/$user/user.conf)
+	log=$HESTIA/log/backup.log
+	if [ -n "$check_suspend" ]; then
+		echo -e "================================" >> $log
+		echo -e "$user" >> $log
+		echo -e "--------------------------------\n" >> $log
+		nice -n 19 ionice -c2 -n7 $BIN/v-backup-user $user >> $log 2>&1
+		echo -e "\n--------------------------------\n\n" >> $log
+	fi
 done
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
-
-# No Logging
-#log_event "$OK" "$ARGUMENTS"
 
 exit

@@ -2,11 +2,12 @@
 # info: add user sftp jail
 # options: USER [RESTART]
 #
-# The script enables sftp jailed environment
-
+# example: v-add-user-sftp-jail admin
+#
+# This function enables sftp jailed environment
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -14,9 +15,12 @@ user=$1
 restart=$2
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -24,27 +28,38 @@ source $HESTIA/conf/hestia.conf
 
 check_args '1' "$#" 'USER'
 is_format_valid 'user'
-user_str=$(grep "^$user:" /etc/passwd |egrep "rssh|nologin")
+check=$(is_object_valid 'user' 'USER' "$user")
+if [ $? -ne 0 ]; then
+	user_str=$(grep "^$user:" /etc/passwd | egrep "rssh|nologin")
+	#try to detect "owner" of the ftp_user if not found dont set it up
+	user_owner=$(echo $user_str | cut -f6 -d : | cut -f3 -d /)
+	is_object_valid 'user' 'USER' "$user_owner"
+fi
+user_str=$(grep "^$user:" /etc/passwd | egrep "rssh|nologin")
 if [ -z "$user_str" ]; then
-    exit
+	exit
 fi
 
-# Do not create chroot for syslog user
-if [ $user = "syslog" ]; then
-    exit
+# Check whether SFTP jail is enabled before adding a user jail
+if ! grep -A1 '^# Hestia SFTP Chroot$' /etc/ssh/sshd_config | grep -q '^Match User' &> /dev/null; then
+	exit 0
 fi
 
 # Get current users and split into array
 ssh_users=$(grep -A1 "^# Hestia SFTP Chroot" /etc/ssh/sshd_config | sed -n 2p | sed 's/Match User //')
 IFS=',' read -r -a users <<< "$ssh_users"
 
-# Check if jail is already enabled
-if [[ " ${users[@]} " =~ " ${user} " ]]; then
-    if [[ -d /home/$user && ! -n "$(find /home/$user -user root -print -prune -o -prune)" ]]; then
-       chown root:root /home/$user
-    fi
-    exit;
+# Check if jail exist
+match_string="$ssh_users,"
+if [[ "$match_string" =~ ,$user, ]]; then
+	if [[ -d /home/$user && -z "$(find /home/$user -user root -print -prune -o -prune)" ]]; then
+		chown root:root /home/$user
+	fi
+	exit
 fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -54,13 +69,18 @@ fi
 users+=($user)
 
 # Write new user list to config
-users=$(IFS=',';echo "${users[*]// /|}";IFS=$' \t\n')
+users=$(
+	IFS=','
+	echo "${users[*]// /|}"
+	IFS=$' \t\n'
+)
 sed -i "s/$ssh_users/$users/g" /etc/ssh/sshd_config
 
 # Set home folder permission to root
 if [ -d "/home/$user" ]; then
-    chown root:root /home/$user
+	chown root:root /home/$user
 fi
+add_chroot_jail "$user"
 
 #----------------------------------------------------------#
 #                       Hestia                             #
@@ -68,10 +88,10 @@ fi
 
 # Restart ssh service
 if [ "$restart" = 'no' ]; then
-    # Skip restart of SSH daemon
-    echo "" > /dev/null 2>&1
+	# Skip restart of SSH daemon
+	echo "" > /dev/null 2>&1
 else
-    service ssh restart > /dev/null 2>&1
+	service ssh restart > /dev/null 2>&1
 fi
 
 # Logging

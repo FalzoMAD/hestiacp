@@ -2,32 +2,44 @@
 # info: update dns templates
 # options: [RESTART]
 #
-# The function for obtaining updated pack of dns templates.
-
+# example: v-update-dns-templates
+#
+# This function for obtaining updated dns templates from Hestia package.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 restart=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+is_format_valid 'restart'
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 # Update templates
-cp -rf $HESTIA_INSTALL_DIR/templates/dns $HESTIA/data/templates/
+cp -rf $HESTIA_COMMON_DIR/templates/dns $HESTIA/data/templates/
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Clean tmpdir
-rm -rf $tmpdir
-
+$BIN/v-log-action "system" "Info" "Updates" "Default DNS zone templates updated."
 exit

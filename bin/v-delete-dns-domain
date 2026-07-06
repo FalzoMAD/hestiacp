@@ -2,65 +2,80 @@
 # info: delete dns domain
 # options: USER DOMAIN
 #
-# The function for deleting DNS domain. By deleting it all records will also be
+# example: v-delete-dns-domain alice acme.com
+#
+# This function for deleting DNS domain. By deleting it all records will also be
 # deleted.
 
-
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 user=$1
-domain=$(idn -t --quiet -u "$2" )
+domain=$2
 restart="$3"
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '2' "$#" 'USER DOMAIN'
-is_format_valid 'user' 'domain'
+format_domain
+format_domain_idn
+
+check_args '2' "$#" 'USER DOMAIN [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
 is_system_enabled "$DNS_SYSTEM" 'DNS_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
-is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'dns' 'DOMAIN' "$domain"
-is_object_unsuspended 'dns' 'DOMAIN' "$domain"
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
-
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
+suspended=$(grep "DOMAIN='$domain'" $USER_DATA/dns.conf | grep "SUSPENDED='yes'")
+
+dnssec=$(grep "DOMAIN='$domain'" $USER_DATA/dns.conf | grep "DNSSEC='yes'")
+
 records=$(wc -l $USER_DATA/dns/$domain.conf | cut -f 1 -d ' ')
 
 # Deleting system configs
 if [[ "$DNS_SYSTEM" =~ named|bind ]]; then
-    if [ -e '/etc/named.conf' ]; then
-        dns_conf='/etc/named.conf'
-    else
-        dns_conf='/etc/bind/named.conf'
-    fi
+	if [ -e '/etc/named.conf' ]; then
+		dns_conf='/etc/named.conf'
+	else
+		dns_conf='/etc/bind/named.conf'
+	fi
 
-    sed -i "/\/$user\/conf\/dns\/$domain.db\"/d" $dns_conf
-    rm -f $HOMEDIR/$user/conf/dns/$domain.db
+	sed -i "/\/$user\/conf\/dns\/$domain.db\"/d" $dns_conf
+	rm -f $HOMEDIR/$user/conf/dns/$domain.db
+fi
+
+if [ -n "$dnssec" ]; then
+	# Delete existing keys
+	rm -fr $HOMEDIR/$user/conf/dns/$domain.db.*
+	rm -fr /var/cache/bind/K$domain_idn.*
+	rm -fr $USER_DATA/keys/K$domain_idn.*
 fi
 
 # Updating dns-cluster queue
-if [ ! -z "$DNS_CLUSTER" ]; then
-    cmd="$BIN/v-delete-remote-dns-domain $user $domain"
-    echo "$cmd" >> $HESTIA/data/queue/dns-cluster.pipe
+if [ "$DNS_CLUSTER" = "yes" ]; then
+	cmd="$BIN/v-delete-remote-dns-domain $user $domain"
+	echo "$cmd" >> $HESTIA/data/queue/dns-cluster.pipe
 fi
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
@@ -75,11 +90,16 @@ decrease_user_value "$user" '$U_DNS_DOMAINS'
 decrease_user_value "$user" '$U_DNS_RECORDS' "$records"
 
 # Restarting named
-$BIN/v-restart-dns $restart
-check_result $? "Bind restart failed" >/dev/null
+$BIN/v-restart-dns "$restart"
+check_result $? "Bind restart failed" > /dev/null
+
+# Check if is suspended to decrease the suspended value
+if [ -n "$suspended" ]; then
+	decrease_user_value "$user" '$SUSPENDED_DNS'
+fi
 
 # Logging
-log_history "deleted dns domain $domain"
+$BIN/v-log-action "$user" "Info" "DNS" "Deleted DNS zone (Name: $domain)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

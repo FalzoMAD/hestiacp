@@ -4,191 +4,418 @@ declare(strict_types=1);
 
 namespace Hestia\System;
 
-class HestiaApp {
+use Exception;
+use RuntimeException;
+use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Process;
 
-    protected const TMPDIR_DOWNLOADS="/tmp/hestia-webapp";
+use function _;
+use function array_column;
+use function array_filter;
+use function basename;
+use function chmod;
+use function explode;
+use function in_array;
+use function realpath;
+use function sprintf;
+use function str_contains;
+use function trigger_error;
+use function unlink;
 
-    public function __construct() {
-        @mkdir(self::TMPDIR_DOWNLOADS);
+use function var_dump;
+use const DIRECTORY_SEPARATOR;
+
+class HestiaApp
+{
+    public function addDirectory(string $path): void
+    {
+        try {
+            $this->runUser('v-add-fs-directory', [$path]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(sprintf('Failed to add directory "%s"', $path));
+        }
     }
 
-    public function run(string $cmd, $args, &$cmd_result=null) : bool
+    public function copyDirectory(string $fromPath, string $toPath): void
     {
-        $cli_script = HESTIA_CMD . '/' . basename($cmd);
-        $cli_arguments = '';
+        try {
+            $this->runUser('v-copy-fs-directory', [$fromPath, $toPath]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(
+                sprintf('Failed to copy directory "%s" to "%s"', $fromPath, $toPath),
+            );
+        }
+    }
 
-        if (!empty($args) && is_array($args)) {
-            foreach ($args as $arg) {
-                $cli_arguments .= escapeshellarg((string)$arg) . ' ';
+    public function deleteDirectory(string $path): void
+    {
+        try {
+            $this->runUser('v-delete-fs-directory', [$path]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(sprintf('Failed to remove directory "%s"', $path));
+        }
+    }
+
+    /**
+     * @param string $path
+     * @return string[]
+     */
+    public function listFiles(string $path): array
+    {
+        try {
+            $result = $this->runUser('v-run-cli-cmd', ['ls', '-A', $path]);
+
+            return array_filter(explode("\n", $result->output));
+        } catch (ProcessFailedException) {
+            throw new RuntimeException('Cannot list domain files');
+        }
+    }
+
+    public function readFile(string $path): string
+    {
+        try {
+            $result = $this->runUser('v-open-fs-file', [$path]);
+
+            return $result->output;
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(sprintf('Failed to remove directory "%s"', $path));
+        }
+    }
+
+    public function createFile(string $path, string $contents): void
+    {
+        $tmpFile = tempnam('/tmp', 'hst.');
+
+        if (!$tmpFile) {
+            throw new RuntimeException('Error creating temp file');
+        }
+
+        if (!file_put_contents($tmpFile, $contents)) {
+            throw new RuntimeException('Error writing to temp file');
+        }
+
+        chmod($tmpFile, 0644);
+
+        $this->runUser('v-copy-fs-file', [$tmpFile, $path]);
+
+        unlink($tmpFile);
+    }
+
+    public function moveFile(string $fromPath, string $toPath): void
+    {
+        try {
+            $this->runUser('v-move-fs-file', [$fromPath, $toPath]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(
+                sprintf('Failed to move file "%s" to "%s"', $fromPath, $toPath),
+            );
+        }
+    }
+
+    public function changeFilePermissions(string $filePath, string $permission): void
+    {
+        try {
+            $this->runUser('v-change-fs-file-permission', [$filePath, $permission]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(
+                sprintf('Failed to change file "%s" permissions to "%s"', $filePath, $permission),
+            );
+        }
+    }
+
+    public function deleteFile(string $filePath): void
+    {
+        try {
+            $this->runUser('v-delete-fs-file', [$filePath]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(sprintf('Failed to delete file "%s"', $filePath));
+        }
+    }
+
+    public function archiveExtract(string $filePath, string $extractDirectoryPath): void
+    {
+        if (!realpath($filePath)) {
+            throw new RuntimeException('Error extracting archive: archive file not found');
+        }
+
+        if (empty($extractDirectoryPath)) {
+            throw new RuntimeException('Error extracting archive: missing target folder');
+        }
+
+        try {
+            $this->runUser('v-extract-fs-archive', [$filePath, $extractDirectoryPath, '', 1]);
+
+            unlink($filePath);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(sprintf('Failed to extract "%s"', $filePath));
+        }
+    }
+
+    public function downloadUrl(string $url, string $path): string
+    {
+        try {
+            $result = $this->runUser('v-run-cli-cmd', [
+                '/usr/bin/wget',
+                '--tries',
+                '3',
+                '--timeout=30',
+                '--no-dns-cache',
+                '-nv',
+                $url,
+                '-P',
+                $path,
+            ]);
+
+            $pattern = '/URL:\s*.+?\s*\[.+?\]\s*->\s*"(.+?)"/';
+            if (preg_match($pattern, $result->output, $matches) && count($matches) > 1) {
+                return $matches[1];
             }
-        } else {
-            $cli_arguments = escapeshellarg($args);
-        }
 
-        exec ($cli_script . ' ' . $cli_arguments . ' 2>&1', $output, $exit_code);
-
-        $result['code'] = $exit_code;
-        $result['args'] = $cli_arguments;
-        $result['raw']  = $output;
-        $result['text'] = implode( PHP_EOL, $output);
-        $result['json'] = json_decode($result['text'], true);
-        $cmd_result = (object)$result;
-
-        return ($exit_code === 0);
-    }
-
-    public function runUser(string $cmd, $args, &$cmd_result=null) : bool
-    {
-        if (!empty($args) && is_array($args)) {
-            array_unshift($args, $this->user());
-        } else {
-            $args = [$this->user(), $args];
-        }
-        return $this->run($cmd, $args, $cmd_result);
-    }
-
-    public function installComposer()
-    {
-        exec("curl https://composer.github.io/installer.sig", $output);
-
-        $signature = implode(PHP_EOL, $output);
-        if (empty($signature)) {
-           throw new \Exception("Error reading composer signature");
-        }
-
-        $composer_setup = self::TMPDIR_DOWNLOADS . DIRECTORY_SEPARATOR . 'composer-setup-' . $signature . '.php';
-
-        exec("wget https://getcomposer.org/installer --quiet -O " . escapeshellarg($composer_setup), $output, $return_code);
-        if ($return_code !== 0 ) {
-            throw new \Exception("Error downloading composer");
-        }
-
-        if ($signature !== hash_file('sha384', $composer_setup)) {
-            unlink($composer_setup);
-            throw new \Exception("Invalid composer signature");
-        }
-
-        $install_folder = $this->getUserHomeDir() . DIRECTORY_SEPARATOR . '.composer';
-        $this->runUser('v-run-cli-cmd', ["/usr/bin/php", $composer_setup, "--quiet", "--install-dir=".$install_folder, "--filename=composer" ], $status);
-
-        unlink($composer_setup);
-
-        if ($status->code !== 0 ) {
-            throw new \Exception("Error installing composer");
+            // Fallback on guessed result
+            return $path . '/' . basename($url);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(
+                sprintf('Failed to download "%s" to path "%s"', $url, $path),
+            );
         }
     }
 
-    public function runComposer($args, &$cmd_result=null) : bool
+    public function sendPostRequest($url, array $formData, array $headers = []): void
     {
-        $composer = $this->getUserHomeDir() . DIRECTORY_SEPARATOR . '.composer' . DIRECTORY_SEPARATOR . 'composer';
-        if(!is_file($composer)) {
-            $this->installComposer();
+        $ch = curl_init($url);
+
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($formData));
+
+        if ($headers !== []) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         }
 
-        if (!empty($args) && is_array($args)) {
-            array_unshift($args, 'composer');
-        } else {
-            $args = ['composer', $args];
+        curl_exec($ch);
+
+        $error = curl_error($ch);
+        $errno = curl_errno($ch);
+
+        curl_close($ch);
+
+        if (0 !== $errno) {
+            throw new RuntimeException($error, $errno);
         }
-
-        return $this->runUser('v-run-cli-cmd', $args, $cmd_result);
-    }
-
-    // Logged in user
-    public function realuser() : string
-    {
-        return $_SESSION['user'];
     }
 
     // Effective user
-    public function user() : string
+    public function user(): string
     {
-        $user = $this->realuser();
-        if ($user == 'admin' && !empty($_SESSION['look'])) {
+        $user = $_SESSION['user'];
+
+        if ($_SESSION['userContext'] === 'admin' && !empty($_SESSION['look'])) {
             $user = $_SESSION['look'];
         }
 
-        if(strpos($user, DIRECTORY_SEPARATOR) !== false) {
-            throw new \Exception("illegal characters in username");
+        if (str_contains($user, DIRECTORY_SEPARATOR)) {
+            throw new Exception('illegal characters in username');
         }
         return $user;
     }
 
-    public function getUserHomeDir()
+    public function getUserHomeDir(): string
     {
         $info = posix_getpwnam($this->user());
         return $info['dir'];
     }
 
-    public function userOwnsDomain(string $domain) : bool
+    public function userOwnsDomain(string $domain): bool
     {
-        return $this->runUser('v-list-web-domain', [$domain, 'json']);
+        try {
+            $this->runUser('v-list-web-domain', [$domain, 'json']);
+
+            return true;
+        } catch (ProcessFailedException) {
+            return false;
+        }
     }
 
-    public function databaseAdd(string $dbname, string $dbuser, string $dbpass)
+    /**
+     * @return string[]
+     */
+    public function getDatabaseHosts(string $type): array
     {
-        $v_password = tempnam("/tmp","hst");
-        $fp = fopen($v_password, "w");
-        fwrite($fp, $dbpass."\n");
+        try {
+            $result = $this->run('v-list-database-hosts', ['json']);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException('Failed to list database hosts');
+        }
+
+        $hostOfType = array_filter(
+            $result->getOutputJson(),
+            fn(array $host) => $host['TYPE'] === $type,
+        );
+
+        return array_column($hostOfType, 'HOST');
+    }
+
+    public function checkDatabaseLimit(): bool
+    {
+        try {
+            $result = $this->runUser('v-list-user', ['json']);
+
+            $userInfo = $result->getOutputJson()[$this->user()];
+
+            return $userInfo['DATABASES'] === 'unlimited' ||
+                $userInfo['DATABASES'] - $userInfo['U_DATABASES'] < 1;
+        } catch (ProcessFailedException) {
+            throw new RuntimeException('Unable to check database limit');
+        }
+    }
+
+    public function databaseAdd(
+        string $name,
+        string $user,
+        string $password,
+        string $host,
+        string $type = 'mysql',
+        string $charset = 'utf8mb4',
+    ): void {
+        $passwordFile = tempnam('/tmp', 'hst');
+
+        $fp = fopen($passwordFile, 'w');
+        fwrite($fp, $password . "\n");
         fclose($fp);
-        $status = $this->runUser('v-add-database', [$dbname, $dbuser, $v_password]);
-        unlink($v_password);
-        return $status;
+
+        try {
+            $this->runUser('v-add-database', [$name, $user, $passwordFile, $type, $host, $charset]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(_('Unable to add database!'));
+        } finally {
+            unlink($passwordFile);
+        }
     }
 
-    public function getWebDomainIp(string $domain)
+    public function changeWebTemplate(string $domain, string $template): void
     {
-        $this->runUser('v-list-web-domain', [$domain, 'json'], $result);
-        $ip = $result->json[$domain]['IP'];
-        return filter_var($ip, FILTER_VALIDATE_IP);
+        try {
+            $this->runUser('v-change-web-domain-tpl', [$domain, $template]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(sprintf('Failed to change to template "%s"', $template));
+        }
     }
 
-    public function getWebDomainPath(string $domain)
+    public function changeBackendTemplate(string $domain, string $template): void
     {
-        return Util::join_paths( $this->getUserHomeDir() , "web", $domain);
+        try {
+            $this->runUser('v-change-web-domain-backend-tpl', [$domain, $template]);
+        } catch (ProcessFailedException) {
+            throw new RuntimeException(
+                sprintf('Failed to change backend template to "%s"', $template),
+            );
+        }
     }
 
-    public function downloadUrl(string $src, $path=null, &$result=null)
+    public function getSupportedPHPVersions(array $supportedPHP): array
     {
-        if (strpos($src,'http://') !== 0 &&
-            strpos($src,'https://')!== 0 ) {
-            return false;
-        }
+        try {
+            // Load installed PHP Versions
+            $result = $this->run('v-list-sys-php', ['json']);
 
-        exec("/usr/bin/wget --tries 3 --timeout=30 --no-dns-cache -nv " . escapeshellarg($src). " -P " . escapeshellarg(self::TMPDIR_DOWNLOADS) . ' 2>&1', $output, $return_var);
-        if ($return_var !== 0) {
-            return false;
-        }
+            $installedPHPVersions = array_filter(
+                $result->getOutputJson(),
+                fn(string $installedPHP) => in_array($installedPHP, $supportedPHP, true),
+            );
 
-        if(!preg_match('/URL:\s*(.+?)\s*\[(.+?)\]\s*->\s*"(.+?)"/', implode(PHP_EOL, $output), $matches)) {
-            return false;
-        }
+            sort($installedPHPVersions);
 
-        if(empty($matches) || count($matches) != 4) {
-            return false;
+            return $installedPHPVersions;
+        } catch (ProcessFailedException) {
+            throw new RuntimeException('Failed to load installed PHP versions');
         }
-
-        $status['url'] = $matches[1];
-        $status['file'] = $matches[3];
-        $result = (object)$status;
-        return true;
     }
 
-    public function archiveExtract(string $src, string $path, $skip_components=null)
+    public function getWebDomain(string $domainName): WebDomain
     {
-        if (empty($path)) {
-            throw new \Exception("Error extracting archive: missing target folder");
+        try {
+            $result = $this->runUser('v-list-web-domain', [$domainName, 'json']);
+
+            return new WebDomain(
+                $domainName,
+                Util::joinPaths($this->getUserHomeDir(), 'web', $domainName),
+                filter_var($result->getOutputJson()[$domainName]['IP'], FILTER_VALIDATE_IP),
+                $result->getOutputJson()[$domainName]['SSL'] === 'yes',
+            );
+        } catch (ProcessFailedException) {
+            throw new Exception('Cannot find domain for user');
+        }
+    }
+
+    public function runComposer(string $phpVersion, array $arguments): HestiaCommandResult
+    {
+        $this->runUser('v-add-user-composer', ['2', 'yes']);
+
+        $composerBin = $this->getUserHomeDir() . '/.composer/composer';
+
+        return $this->runPHP($phpVersion, $composerBin, $arguments);
+    }
+
+    public function runWp(string $phpVersion, array $arguments): HestiaCommandResult
+    {
+        $this->runUser('v-add-user-wp-cli', ['yes']);
+
+        $wpCliBin = $this->getUserHomeDir() . '/.wp-cli/wp';
+
+        return $this->runPHP($phpVersion, $wpCliBin, $arguments);
+    }
+
+    public function runPHP(
+        string $phpVersion,
+        string $command,
+        array $arguments,
+    ): HestiaCommandResult {
+        $phpCommand = ['/usr/bin/php' . $phpVersion, $command, ...$arguments];
+
+        try {
+            return $this->runUser('v-run-cli-cmd', $phpCommand);
+        } catch (ProcessFailedException $exception) {
+            throw new RuntimeException(
+                sprintf(
+                    'Failed to run php command "%s"',
+                    $exception->getProcess()->getCommandLine(),
+                ),
+            );
+        }
+    }
+
+    private function runUser(string $cmd, array $arguments): HestiaCommandResult
+    {
+        return $this->run($cmd, [$this->user(), ...$arguments]);
+    }
+
+    private function run(string $cmd, array $arguments): HestiaCommandResult
+    {
+        $cli_script = realpath(HESTIA_DIR_BIN . $cmd);
+
+        $command = ['/usr/bin/sudo', $cli_script, ...$arguments];
+
+        // Escape spaces to disallow splitting commands and allow spaces in names like site names
+        $command = array_map(fn(string $argument) => str_replace(' ', '\\ ', $argument), $command);
+
+        $process = new Process($command);
+        // Increase the timeout from the default 60 seconds to 5 minutes to handle long install processes
+        $process->setTimeout(300);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            //log error message in nginx-error.log
+            trigger_error($process->getCommandLine() . ' | ' . $process->getOutput());
+            //throw exception if command fails
+            throw new ProcessFailedException($process);
         }
 
-        if (realpath($src)) {
-            $archive_file = $src;
-        } else  {
-            if( !$this->downloadUrl($src, null, $download_result) ) {
-                throw new \Exception("Error downloading archive");
-            }
-            $archive_file = $download_result->file;
-        }
-
-        return $this->runUser('v-extract-fs-archive', [$archive_file, $path, null, $skip_components]);
+        return new HestiaCommandResult(
+            $process->getCommandLine(),
+            $process->getExitCode(),
+            $process->getOutput(),
+        );
     }
 }

@@ -1,44 +1,46 @@
 #!/bin/bash
-# info: rebuild system user
-# options: USER [RESTART]
+# info: rebuild system users
+# options: [RESTART]
 #
-# The function rebuilds system user accounts.
+# example: v-rebuild-users
+#
+# This function rebuilds user configuration for all users.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 restart=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/rebuild.sh
 source $HESTIA/func/rebuild.sh
-source $HESTIA/conf/hestia.conf
-
-# Export sbin
-export PATH=$PATH:/usr/sbin
-
+# shellcheck source=/usr/local/hestia/func/syshealth.sh
+source $HESTIA/func/syshealth.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER [RESTART]'
-is_format_valid 'user'
-is_object_valid 'user' 'USER' "$user"
-is_object_unsuspended 'user' 'USER' "$user"
-
+is_format_valid 'restart'
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 # Rebuild loop
-for user in $($HESTIA/bin/v-list-sys-users plain); do
-    $BIN/v-rebuild-user $user
+for user in $("$BIN/v-list-users" list); do
+	$BIN/v-rebuild-user "$user" "$restart"
 done
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

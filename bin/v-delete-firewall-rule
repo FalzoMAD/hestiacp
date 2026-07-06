@@ -2,23 +2,24 @@
 # info: delete firewall rule
 # options: RULE
 #
-# The function deletes firewall rule.
-
+# example: v-delete-firewall-rule SSH_BLOCK
+#
+# This function deletes firewall rule.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
-
-# Importing system variables
-source /etc/profile
 
 # Argument definition
 rule=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -27,11 +28,10 @@ source $HESTIA/conf/hestia.conf
 check_args '1' "$#" 'RULE'
 is_format_valid 'rule'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
-is_object_valid '../../data/firewall/rules' 'RULE' "$rule"
+is_object_valid '../../../data/firewall/rules' 'RULE' "$rule"
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
-
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -43,12 +43,12 @@ sed -i "/RULE='$rule' /d" $HESTIA/data/firewall/rules.conf
 # Updating system firewall
 $BIN/v-update-firewall
 
-
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 # Logging
+$BIN/v-log-action "system" "Info" "Firewall" "Removed firewall rule (ID: $rule)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

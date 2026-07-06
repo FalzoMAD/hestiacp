@@ -2,17 +2,19 @@
 # info: add cron reports
 # options: NONE
 #
-# The script for enabling restart cron tasks
-
+# This function for enabling restart cron tasks
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -20,18 +22,19 @@ source $HESTIA/conf/hestia.conf
 
 is_system_enabled "$CRON_SYSTEM" 'CRON_SYSTEM'
 
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 # Add cron job
-cmd="sudo $HESTIA/bin/v-update-sys-queue restart"
-check_cron=$(grep "$cmd" $HESTIA/data/users/admin/cron.conf 2> /dev/null)
-if [ -z "$check_cron" ] && [ ! -z "$CRON_SYSTEM" ]; then
-    $BIN/v-add-cron-job admin '*' '*' '*' '*' '*' "$cmd"
+cmd="v-update-sys-queue restart"
+check_cron=$(grep "$cmd" "/var/spool/cron/crontabs/hestiaweb" 2> /dev/null)
+if [ -z "$check_cron" ] && [ -n "$CRON_SYSTEM" ]; then
+	sed -i -e "\$a*/2 * * * * sudo /usr/local/hestia/bin/v-update-sys-queue restart" "/var/spool/cron/crontabs/hestiaweb"
 fi
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

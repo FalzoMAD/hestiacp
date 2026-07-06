@@ -1,104 +1,111 @@
 <?php
+use function Hestiacp\quoteshellarg\quoteshellarg;
+
 ob_start();
-$TAB = 'WEB';
+$TAB = "WEB";
 
 // Main include
-include($_SERVER['DOCUMENT_ROOT']."/inc/main.php");
-require_once $_SERVER['DOCUMENT_ROOT']."/src/init.php";
+include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
+require_once $_SERVER["DOCUMENT_ROOT"] . "/src/init.php";
 
 // Check domain argument
-if (empty($_GET['domain'])) {
-    header("Location: /list/web/");
-    exit;
+if (empty($_GET["domain"])) {
+	header("Location: /list/web/");
+	exit();
 }
 
 // Edit as someone else?
-if (($_SESSION['user'] == 'admin') && (!empty($_GET['user']))) {
-    $user=escapeshellarg($_GET['user']);
+if ($_SESSION["user"] == "admin" && !empty($_GET["user"])) {
+	$user = quoteshellarg($_GET["user"]);
 }
 
-// Get all user domains 
-exec (HESTIA_CMD."v-list-web-domains ".escapeshellarg($user)." json", $output, $return_var);
-$user_domains = json_decode(implode('', $output), true);
-$user_domains = array_keys($user_domains);
+// Check if domain belongs to the user
+$v_domain = $_GET["domain"];
+exec(
+	HESTIA_CMD . "v-list-web-domain " . $user . " " . quoteshellarg($v_domain) . " json",
+	$output,
+	$return_var,
+);
+if ($return_var > 0) {
+	check_return_code_redirect($return_var, $output, "/list/web/");
+}
+unset($output);
+exec(HESTIA_CMD . "v-list-sys-php json", $output, $return_var);
+$php_versions = json_decode(implode("", $output), true);
 unset($output);
 
-// List domain
-$v_domain = $_GET['domain'];
-if(!in_array($v_domain, $user_domains)) {
-    header("Location: /list/web/");
-    exit;
-}
-
-$v_web_apps = [
-    [ 'name'=>'Wordpress', 'group'=>'cms', 'enabled'=>true, 'version'=>'latest', 'thumbnail'=>'/images/webapps/wp-thumb.png' ],
-    [ 'name'=>'Drupal',    'group'=>'cms', 'enabled'=>false,'version'=>'latest', 'thumbnail'=>'/images/webapps/drupal-thumb.png' ],
-    [ 'name'=>'Joomla',    'group'=>'cms', 'enabled'=>false,'version'=>'latest', 'thumbnail'=>'/images/webapps/joomla-thumb.png' ],
-
-    [ 'name'=>'Opencart',   'group'=>'ecommerce', 'enabled'=>true,  'version'=>'3.0.3.3', 'thumbnail'=>'/images/webapps/opencart-thumb.png' ],
-    [ 'name'=>'Prestashop', 'group'=>'ecommerce', 'enabled'=>true, 'version'=>'1.7.6.5', 'thumbnail'=>'/images/webapps/prestashop-thumb.png' ],
-    [ 'name'=>'Magento',    'group'=>'ecommerce', 'enabled'=>false, 'version'=>'latest', 'thumbnail'=>'/images/webapps/magento-thumb.png' ],
-
-    [ 'name'=>'Laravel', 'group'=>'starter', 'enabled'=>true, 'version'=>'7.x', 'thumbnail'=>'/images/webapps/laravel-thumb.png' ],
-    [ 'name'=>'Symfony', 'group'=>'starter', 'enabled'=>true, 'version'=>'4.3.x', 'thumbnail'=>'/images/webapps/symfony-thumb.png' ],
-];
-
 // Check GET request
-if (!empty($_GET['app'])) {
-    $app = basename($_GET['app']);
-    
-    $hestia = new \Hestia\System\HestiaApp();
-    $app_installer_class = '\Hestia\WebApp\Installers\\' . $app . 'Setup';
-    if(class_exists($app_installer_class)) {
-        try {
-            $app_installer = new $app_installer_class($v_domain, $hestia);
-            $installer = new \Hestia\WebApp\AppWizard($app_installer, $v_domain, $hestia);
-            $GLOBALS['WebappInstaller'] = $installer;
-        } catch (Exception $e) {
-            $_SESSION['error_msg'] = $e->getMessage();
-            header('Location: /add/webapp/?domain=' . $v_domain);
-            exit();
-        }
-    } else {
-        $_SESSION['error_msg'] = "${app} installer missing";
-    }
+if (!empty($_GET["app"])) {
+	$app = basename($_GET["app"]);
+
+	$hestia = new \Hestia\System\HestiaApp();
+	$app_installer_class = "\Hestia\WebApp\Installers\\" . $app . "\\" . $app . "Setup";
+	if (class_exists($app_installer_class)) {
+		try {
+			$app_installer = new $app_installer_class($hestia);
+			$info = $app_installer->getInfo();
+
+			if (!$info->isInstallable()) {
+				$_SESSION["error_msg"] = sprintf(
+					_("Unable to install %s, required php version is not available."),
+					$app,
+				);
+			} else {
+				$installer = new \Hestia\WebApp\AppWizard($app_installer, $v_domain, $hestia);
+				$GLOBALS["WebappInstaller"] = $installer;
+			}
+		} catch (Exception $e) {
+			$_SESSION["error_msg"] = $e->getMessage();
+			header("Location: /add/webapp/?domain=" . $v_domain);
+			exit();
+		}
+	} else {
+		$_SESSION["error_msg"] = sprintf(_("%s installer missing."), $app);
+	}
 }
 
 // Check POST request
-if (!empty($_POST['ok']) && !empty($app) ) {
+if (!empty($_POST["ok"]) && !empty($app)) {
+	// Check token
+	verify_csrf($_POST);
 
-    // Check token
-    if ((!isset($_POST['token'])) || ($_SESSION['token'] != $_POST['token'])) {
-        header('location: /login/');
-        exit();
-    }
+	if ($installer) {
+		try {
+			$installer->execute($_POST);
 
-    if ($installer) {
-        try{
-            if (!$installer->execute($_POST)){
-                $result = $installer->getStatus();
-                if(!empty($result))
-                    $_SESSION['error_msg'] = implode(PHP_EOL, $result);
-            } else {
-                $_SESSION['ok_msg'] = htmlspecialchars($app) . " App was installed succesfully !";
-                header('Location: /add/webapp/?domain=' . $v_domain);
-                exit();
-            }
-        } catch (Exception $e) {
-           $_SESSION['error_msg'] = $e->getMessage();
-           header('Location: /add/webapp/?app='.rawurlencode($app).'&domain=' . $v_domain);
-           exit();
-        }
-    }
+			$_SESSION["ok_msg"] = sprintf(_("%s installed successfully."), htmlspecialchars($app));
+
+			header("Location: /add/webapp/?domain=" . $v_domain);
+			exit();
+		} catch (Exception $e) {
+			$_SESSION["error_msg"] = $e->getMessage();
+			header("Location: /add/webapp/?app=" . rawurlencode($app) . "&domain=" . $v_domain);
+			exit();
+		}
+	}
 }
 
-if(!empty($installer)) {
-    render_page($user, $TAB, 'setup_webapp');
+if (!empty($installer)) {
+	render_page($user, $TAB, "setup_webapp");
 } else {
-    render_page($user, $TAB, 'list_webapps');
-}
+	$hestia = new \Hestia\System\HestiaApp();
+	$appInstallers = glob(__DIR__ . "/../../src/app/WebApp/Installers/*/*.php");
 
+	$v_web_apps = [];
+	foreach ($appInstallers as $app) {
+		$pattern = "/Installers\/([a-zA-Z][a-zA-Z0,9].*)\/([a-zA-Z][a-zA-Z0,9].*)Setup\.php/";
+		$class = "\Hestia\WebApp\Installers\%s\%sSetup";
+
+		if (preg_match($pattern, $app, $matches)) {
+			$app_installer_class = sprintf($class, $matches[1], $matches[1]);
+
+			$v_web_apps[] = (new $app_installer_class($hestia))->getInfo();
+		}
+	}
+
+	render_page($user, $TAB, "list_webapps");
+}
 
 // Flush session messages
-unset($_SESSION['error_msg']);
-unset($_SESSION['ok_msg']);
+unset($_SESSION["error_msg"]);
+unset($_SESSION["ok_msg"]);

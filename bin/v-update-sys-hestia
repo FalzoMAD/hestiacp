@@ -1,25 +1,26 @@
 #!/bin/bash
 # info: update hestia package/configs
-# options: PACKAGE [VERSION]
+# options: PACKAGE
 #
-# The function runs as rpm update trigger. It pulls shell script from hestia
-# server and runs it.
-
+# example: v-update-sys-hestia hestia-php
+#
+# This function runs as apt update trigger. It pulls shell script from hestia
+# server and runs it. (hestia, hestia-nginx and hestia-php are valid options)
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 package=$1
 
-# Importing system environment
-source /etc/profile
-
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -27,6 +28,10 @@ source $HESTIA/conf/hestia.conf
 
 # Checking arg number
 check_args '1' "$#" 'PACKAGE'
+is_hestia_package "hestia hestia-nginx hestia-php" "$package"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -34,11 +39,11 @@ check_args '1' "$#" 'PACKAGE'
 
 # Update repo
 apt-get update -o Dir::Etc::sourcelist="sources.list.d/hestia.list" \
-    -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" -qq
+	-o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" -qq
 
 # Update hestia package
 apt-get install $package -qq > /dev/null 2>&1
-check_result $? "$package update failed" $E_UPDATE
+check_result $? "$package update failed" "$E_UPDATE"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

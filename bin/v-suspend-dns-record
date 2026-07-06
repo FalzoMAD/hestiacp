@@ -2,11 +2,12 @@
 # info: suspend dns domain record
 # options: USER DOMAIN ID [RESTART]
 #
-# The function suspends a certain domain record.
-
+# example: v-suspend-dns-record alice wonderland.com 42 yes
+#
+# This function suspends a certain domain record.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -17,22 +18,26 @@ id=$3
 restart=$4
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 # Additional argument formatting
 format_domain
 format_domain_idn
 # TODO: $domain_idn not used in this script - maybe $domain should be converted to $doman_idn ?
 
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
 check_args '3' "$#" 'USER DOMAIN ID [RESTART]'
-is_format_valid 'user' 'domain' 'id'
+is_format_valid 'user' 'domain' 'id' 'restart'
 is_system_enabled "$DNS_SYSTEM" 'DNS_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_object_valid 'dns' 'DOMAIN' "$domain"
@@ -43,25 +48,36 @@ is_object_unsuspended "dns/$domain" 'ID' "$id"
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-update_object_value "dns/$domain" 'ID' "$id"  '$SUSPENDED' "yes"
+update_object_value "dns/$domain" 'ID' "$id" '$SUSPENDED' "yes"
 
+# Update serial
+update_domain_serial
 # Updating zone
 if [[ "$DNS_SYSTEM" =~ named|bind ]]; then
-    update_domain_serial
-    update_domain_zone
+	# Do full rebuild due DNS SEC
+	rebuild_dns_domain_conf
 fi
 
+# Updating dns-cluster queue
+if [ "$DNS_CLUSTER" = "yes" ]; then
+	# Check for first sync
+	dlock=$(grep "domain $user $domain" $HESTIA/data/queue/dns-cluster.pipe)
+	if [ -z "$dlock" ]; then
+		cmd="$BIN/v-add-remote-dns-record $user $domain $id"
+		echo "$cmd" >> $HESTIA/data/queue/dns-cluster.pipe
+	fi
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 # Logging
+$BIN/v-log-action "system" "Info" "DNS" "Suspended DNS record (User: $user, Domain: $domain, Record: $id)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

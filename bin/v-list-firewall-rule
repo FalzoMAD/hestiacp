@@ -2,11 +2,12 @@
 # info: list firewall rule
 # options: RULE [FORMAT]
 #
-# The function of obtaining firewall rule parameters.
-
+# example: v-list-firewall-rule 2
+#
+# This function of obtaining firewall rule parameters.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -14,11 +15,16 @@ rule=$1
 format=${2-shell}
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 json_list() {
-    echo '{'
-    echo '    "'$RULE'": {
+	echo '{'
+	echo '    "'$RULE'": {
         "ACTION": "'$ACTION'",
         "PROTOCOL": "'$PROTOCOL'",
         "PORT": "'$PORT'",
@@ -28,33 +34,32 @@ json_list() {
         "TIME": "'$TIME'",
         "DATE": "'$DATE'"
     }'
-    echo '}'
+	echo '}'
 }
 
 # SHELL list function
 shell_list() {
-    echo "ACTION:         $ACTION"
-    echo "PROTOCOL:       $PROTOCOL"
-    echo "PORT:           $PORT"
-    echo "IP:             $IP"
-    echo "COMMENT:        $COMMENT"
-    echo "SUSPENDED:      $SUSPENDED"
-    echo "TIME:           $TIME"
-    echo "DATE:           $DATE"
+	echo "ACTION:         $ACTION"
+	echo "PROTOCOL:       $PROTOCOL"
+	echo "PORT:           $PORT"
+	echo "IP:             $IP"
+	echo "COMMENT:        $COMMENT"
+	echo "SUSPENDED:      $SUSPENDED"
+	echo "TIME:           $TIME"
+	echo "DATE:           $DATE"
 }
 
 # PLAIN list function
 plain_list() {
-    echo -ne "$RULE\t$ACTION\t$PROTOCOL\t$PORT\t$IP\t$COMMENT\t"
-    echo -e "$SUSPENDED\t$TIME\t$DATE"
+	echo -ne "$RULE\t$ACTION\t$PROTOCOL\t$PORT\t$IP\t$COMMENT\t"
+	echo -e "$SUSPENDED\t$TIME\t$DATE"
 }
 
 # CSV list function
 csv_list() {
-    echo "RULE,ACTION,PROTOCOL,PORT,IP,COMMENT,SUSPENDED,TIME,DATE"
-    echo "$RULE,$ACTION,$PROTOCOL,$PORT,$IP,$COMMENT,$SUSPENDED,$TIME,$DATE"
+	echo "RULE,ACTION,PROTOCOL,PORT,IP,COMMENT,SUSPENDED,TIME,DATE"
+	echo "$RULE,$ACTION,$PROTOCOL,$PORT,$IP,$COMMENT,$SUSPENDED,$TIME,$DATE"
 }
-
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -62,8 +67,7 @@ csv_list() {
 
 check_args '1' "$#" 'RULE [FORMAT]'
 is_number_format_valid "$rule" "rule id"
-is_object_valid '../../data/firewall/rules' 'RULE' "$rule"
-
+is_object_valid '../../../data/firewall/rules' 'RULE' "$rule"
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -74,12 +78,11 @@ parse_object_kv_list $(grep "RULE='$rule'" $HESTIA/data/firewall/rules.conf)
 
 # Listing data
 case $format in
-    json)   json_list ;;
-    plain)  plain_list ;;
-    csv)    csv_list ;;
-    shell)  shell_list ;;
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
 esac
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

@@ -2,11 +2,12 @@
 # info: unsuspend database
 # options: USER DATABASE
 #
-# The function for unsuspending database.
-
+# example: v-unsuspend-database admin mydb
+#
+# This function for unsuspending database.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -14,10 +15,14 @@ user=$1
 database=$2
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/db.sh
 source $HESTIA/func/db.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -30,6 +35,8 @@ is_object_valid 'user' 'USER' "$user"
 is_object_valid 'db' 'DB' "$database"
 is_object_suspended 'db' 'DB' "$database"
 
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -40,10 +47,9 @@ get_database_values
 
 # Switching on db type
 case $TYPE in
-    mysql) unsuspend_mysql_database ;;
-    pgsql) unsuspend_pgsql_database ;;
+	mysql) unsuspend_mysql_database ;;
+	pgsql) unsuspend_pgsql_database ;;
 esac
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
@@ -54,6 +60,7 @@ update_object_value 'db' 'DB' "$database" '$SUSPENDED' 'no'
 decrease_user_value "$user" '$SUSPENDED_DB'
 
 # Logging
+$BIN/v-log-action "system" "Info" "Database" "Unsuspended database (User: $user, Database: $database)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

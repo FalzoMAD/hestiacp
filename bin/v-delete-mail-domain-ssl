@@ -2,20 +2,28 @@
 # info: delete mail domain ssl support
 # options: USER DOMAIN
 #
-# The function delete ssl certificates.
+# example: v-delete-mail-domain-ssl user demo.com
+#
+# This function delete ssl certificates.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 user=$1
 domain=$2
+restart=$3
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 # Additional argument formatting
 format_domain
@@ -26,17 +34,14 @@ format_domain_idn
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'USER DOMAIN'
-is_format_valid 'user' 'domain'
+is_format_valid 'user' 'domain' 'restart'
 is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
-is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'mail' 'DOMAIN' "$domain"
-is_object_unsuspended 'mail' 'DOMAIN' "$domain"
 is_object_value_exist 'mail' 'DOMAIN' "$domain" '$SSL'
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
-
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -48,7 +53,7 @@ del_mail_ssl_certificates
 del_webmail_ssl_config
 
 #----------------------------------------------------------#
-#                       Hestia                              #
+#                       Hestia                             #
 #----------------------------------------------------------#
 
 # Updating config
@@ -57,11 +62,11 @@ update_object_value 'mail' 'DOMAIN' "$domain" '$LETSENCRYPT' 'no'
 decrease_user_value "$user" '$U_MAIL_SSL'
 
 # Restarting mail server
-$BIN/v-restart-mail $restart
-check_result $? "Mail restart failed" >/dev/null
+$BIN/v-restart-mail "$restart"
+check_result $? "Mail restart failed" > /dev/null
 
 # Logging
-log_history "disabled mail SSL support on $domain"
+$BIN/v-log-action "$user" "Warning" "Mail" "SSL disabled (Domain: $domain)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

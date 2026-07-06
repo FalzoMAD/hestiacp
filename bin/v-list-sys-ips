@@ -1,28 +1,36 @@
 #!/bin/bash
-# info: list system ips
+# info: list system IPs
 # options: [FORMAT]
 #
-# The function for obtaining the list of system ip adresses.
-
+# example: v-list-sys-ips
+#
+# This function for obtaining the list of system IP addresses.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
-format=${1-shell}
+format="${1-shell}"
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/ip.sh
+source $HESTIA/func/ip.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 # JSON list function
 json_list() {
-    echo '{'
-    ip_count=$(ls $HESTIA/data/ips/ |wc -l)
-    i=1
-    while read IP; do
-        source $HESTIA/data/ips/$IP
-        echo -n '    "'$IP'": {
+	echo '{'
+	ip_count="$(ls $HESTIA/data/ips/ | wc -l)"
+	i=1
+	while read IP; do
+		source_conf "$HESTIA/data/ips/$IP"
+		echo -n '    "'$IP'": {
         "OWNER": "'$OWNER'",
         "STATUS": "'$STATUS'",
         "NAME": "'$NAME'",
@@ -34,49 +42,48 @@ json_list() {
         "TIME": "'$TIME'",
         "DATE": "'$DATE'"
         }'
-        if [ "$i" -lt "$ip_count" ]; then
-            echo ','
-        else
-            echo
-        fi
-        ((i++))
-    done < <(ls $HESTIA/data/ips/)
-    echo '}'
+		if [ "$i" -lt "$ip_count" ]; then
+			echo ','
+		else
+			echo
+		fi
+		((i++))
+	done < <(ls $HESTIA/data/ips/)
+	echo '}'
 }
 
 # SHELL list function
 shell_list() {
-    echo "IP   MASK   NAT   STATUS   WEB  DATE"
-    echo "--   ----   ---   ------   ---  ----"
-    while read IP; do
-        source $HESTIA/data/ips/$IP
-        if [ -z "$NAT" ]; then
-            NAT='no'
-        fi
-        echo "$IP $NETMASK $NAT $STATUS $U_WEB_DOMAINS $DATE"
-    done < <(ls $HESTIA/data/ips/)
+	echo "IP   MASK   NAT    STATUS   WEB  DATE"
+	echo "--   ----   ---    ------   ---  ----"
+	while read IP; do
+		source_conf "$HESTIA/data/ips/$IP"
+		if [ -z "$NAT" ]; then
+			NAT='no'
+		fi
+		echo "$IP $NETMASK $NAT $STATUS $U_WEB_DOMAINS $DATE"
+	done < <(ls $HESTIA/data/ips/)
 }
 
 # PLAIN list function
 plain_list() {
-    while read IP; do
-        source $HESTIA/data/ips/$IP
-        echo -ne "$IP\t$OWNER\t$STATUS\t$NAME\t$U_SYS_USERS\t$U_WEB_DOMAINS\t"
-        echo -e "$INTERFACE\t$NETMASK\t$NAT\t$TIME\t$DATE"
-    done < <(ls $HESTIA/data/ips/)
+	while read IP; do
+		source_conf "$HESTIA/data/ips/$IP"
+		echo -ne "$IP\t$OWNER\t$STATUS\t$NAME\t$U_SYS_USERS\t$U_WEB_DOMAINS\t"
+		echo -e "$INTERFACE\t$NETMASK\t$NAT\t$TIME\t$DATE"
+	done < <(ls $HESTIA/data/ips/)
 }
 
 # CSV list function
 csv_list() {
-    echo -n "IP,OWNER,STATUS,NAME,U_SYS_USERS,U_WEB_DOMAINS,INTERFACE"
-    echo "NETMASK,NAT,TIME,DATE"
-    while read IP; do
-        source $HESTIA/data/ips/$IP
-        echo -n "$IP,$OWNER,$STATUS,$NAME,\"$U_SYS_USERS\",$U_WEB_DOMAINS,"
-        echo "$INTERFACE, $NETMASK,$NAT,$TIME,$DATE"
-    done < <(ls $HESTIA/data/ips/)
+	echo -n "IP,OWNER,STATUS,NAME,U_SYS_USERS,U_WEB_DOMAINS,INTERFACE"
+	echo "NETMASK,NAT,TIME,DATE"
+	while read IP; do
+		source_conf "$HESTIA/data/ips/$IP"
+		echo -n "$IP,$OWNER,$STATUS,$NAME,\"$U_SYS_USERS\",$U_WEB_DOMAINS,"
+		echo "$INTERFACE, $NETMASK,$NAT,$TIME,$DATE"
+	done < <(ls $HESTIA/data/ips/)
 }
-
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -84,12 +91,11 @@ csv_list() {
 
 # Listing data
 case $format in
-    json)   json_list ;;
-    plain)  plain_list ;;
-    csv)    csv_list ;;
-    shell)  shell_list |column -t ;;
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list | column -t ;;
 esac
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #

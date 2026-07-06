@@ -1,50 +1,79 @@
 <?php
-// Init
-error_reporting(NULL);
-ob_start();
-session_start();
+use function Hestiacp\quoteshellarg\quoteshellarg;
 
-include($_SERVER['DOCUMENT_ROOT']."/inc/main.php");
+ob_start();
+
+include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // Check token
-if ((!isset($_GET['token'])) || ($_SESSION['token'] != $_GET['token'])) {
-    header('Location: /login/');
-    exit();
+verify_csrf($_GET);
+
+$backup = quoteshellarg($_GET["backup"]);
+
+$web = "no";
+$dns = "no";
+$mail = "no";
+$db = "no";
+$cron = "no";
+$udir = "no";
+
+if ($_GET["type"] == "web") {
+	$web = quoteshellarg($_GET["object"]);
+}
+if ($_GET["type"] == "dns") {
+	$dns = quoteshellarg($_GET["object"]);
+}
+if ($_GET["type"] == "mail") {
+	$mail = quoteshellarg($_GET["object"]);
+}
+if ($_GET["type"] == "db") {
+	$db = quoteshellarg($_GET["object"]);
+}
+if ($_GET["type"] == "cron") {
+	$cron = "yes";
+}
+if ($_GET["type"] == "udir") {
+	$udir = quoteshellarg($_GET["object"]);
 }
 
-$backup = escapeshellarg($_GET['backup']);
-
-$web = 'no';
-$dns = 'no';
-$mail = 'no';
-$db = 'no';
-$cron = 'no';
-$udir = 'no';
-
-if ($_GET['type'] == 'web') $web = escapeshellarg($_GET['object']);
-if ($_GET['type'] == 'dns') $dns = escapeshellarg($_GET['object']);
-if ($_GET['type'] == 'mail') $mail = escapeshellarg($_GET['object']);
-if ($_GET['type'] == 'db') $db = escapeshellarg($_GET['object']);
-if ($_GET['type'] == 'cron') $cron = 'yes';
-if ($_GET['type'] == 'udir') $udir = escapeshellarg($_GET['object']);
-
-if (!empty($_GET['type'])) {
-    $restore_cmd = HESTIA_CMD."v-schedule-user-restore ".$user." ".$backup." ".$web." ".$dns." ".$mail." ".$db." ".$cron." ".$udir;
+if (!empty($_GET["type"])) {
+	$restore_cmd =
+		HESTIA_CMD .
+		"v-schedule-user-restore " .
+		$user .
+		" " .
+		$backup .
+		" " .
+		$web .
+		" " .
+		$dns .
+		" " .
+		$mail .
+		" " .
+		$db .
+		" " .
+		$cron .
+		" " .
+		$udir;
 } else {
-    $restore_cmd = HESTIA_CMD."v-schedule-user-restore ".$user." ".$backup;
+	$restore_cmd = HESTIA_CMD . "v-schedule-user-restore " . $user . " " . $backup;
 }
 
-exec ($restore_cmd, $output, $return_var);
+exec($restore_cmd, $output, $return_var);
 if ($return_var == 0) {
-    $_SESSION['error_msg'] = __('RESTORE_SCHEDULED');
+	$_SESSION["error_msg"] = _(
+		"Task has been added to the queue. You will receive an email notification when your restore has been completed.",
+	);
 } else {
-    $_SESSION['error_msg'] = implode('<br>', $output);
-    if (empty($_SESSION['error_msg'])) {
-        $_SESSION['error_msg'] = __('Error: hestia did not return any output.');
-    }
-    if ($return_var == 4) {
-        $_SESSION['error_msg'] = __('RESTORE_EXISTS');
-    }
+	$_SESSION["error_msg"] = implode("<br>", $output);
+	if (empty($_SESSION["error_msg"])) {
+		$_SESSION["error_msg"] = _("Error: Hestia did not return any output.");
+	}
+	if ($return_var == 4) {
+		$_SESSION["error_msg"] = _(
+			"An existing restoration task is already running. Please wait for it to finish before launching it again.",
+		);
+	}
 }
 
-header("Location: /list/backup/?backup=" . $_GET['backup']);
+header("Location: /list/backup/?backup=" . $_GET["backup"]);

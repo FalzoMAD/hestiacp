@@ -1,20 +1,10 @@
 #!/bin/bash
 # info: list disk information
-# options: [FORMAT]
+# options:
 #
-# The function lists disk information
-
-
-#----------------------------------------------------------#
-#                    Variable&Function                     #
-#----------------------------------------------------------#
-
-# Argument definition
-#format=${1-shell}
-
-# Includes
-#source $HESTIA/func/main.sh
-
+# example: v-list-sys-disk-status
+#
+# This function lists disk information
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -22,13 +12,18 @@
 
 # Displaying disk usage
 df -h
-echo -en "\n-------------------------------------"
-echo -en  "-------------------------------------\n\n"
+echo -en "\n---------------------------------------------"
+echo -en "---------------------------------------------\n\n"
+
+# Displaying inodes usage
+df -ih
+echo -en "\n---------------------------------------------"
+echo -en "---------------------------------------------\n\n"
 
 # Displaying I/O usage
 iostat -m
-echo -en "\n-------------------------------------"
-echo -en  "-------------------------------------\n\n"
+echo -en "\n---------------------------------------------"
+echo -en "---------------------------------------------\n\n"
 
 # Displaying disk information
 fdisk -l

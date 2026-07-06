@@ -2,20 +2,25 @@
 # info: search domain owner
 # options: DOMAIN [TYPE]
 #
-# The function that allows to find user objects.
-
+# example: v-search-domain-owner acme.com
+#
+# This function that allows to find user objects.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
-domain=$(idn -t --quiet -u "$1" )
+domain=$1
 type=${2-any}
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -23,27 +28,29 @@ source $HESTIA/func/main.sh
 
 check_args '1' "$#" 'DOMAIN [TYPE]'
 
+is_format_valid 'domain'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Define conf 
+# Define conf
 case $type in
-    web)    conf="$HESTIA/data/users/*/web.conf" ;;
-    dns)    conf="$HESTIA/data/users/*/dns.conf" ;;
-    mail)   conf="$HESTIA/data/users/*/mail.conf" ;;
-    *)      conf="$HESTIA/data/users/*/*.conf"
+	web) conf="$HESTIA/data/users/*/web.conf" ;;
+	dns) conf="$HESTIA/data/users/*/dns.conf" ;;
+	mail) conf="$HESTIA/data/users/*/mail.conf" ;;
+	*) conf="$HESTIA/data/users/*/*.conf" ;;
 esac
-
 
 owner=$(grep -H "DOMAIN='$domain'" $conf | head -n 1 | cut -f7 -d '/')
 if [ -z "$owner" ]; then
-    exit $E_NOTEXIST
+	exit "$E_NOTEXIST"
 fi
 
-echo $owner
-
+echo "$owner"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

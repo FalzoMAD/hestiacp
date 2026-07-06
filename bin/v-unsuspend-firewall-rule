@@ -2,20 +2,24 @@
 # info: unsuspend firewall rule
 # options: RULE
 #
-# The function unsuspends a certain firewall rule.
-
+# example: v-unsuspend-firewall-rule 7
+#
+# This function unsuspends a certain firewall rule.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 rule=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -24,8 +28,8 @@ source $HESTIA/conf/hestia.conf
 check_args '1' "$#" 'RULE'
 is_format_valid 'rule'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
-is_object_valid '../../data/firewall/rules' 'RULE' "$rule"
-is_object_suspended '../../data/firewall/rules' 'RULE' "$rule"
+is_object_valid '../../../data/firewall/rules' 'RULE' "$rule"
+is_object_suspended '../../../data/firewall/rules' 'RULE' "$rule"
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
@@ -35,17 +39,17 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Suspending rule
-update_object_value ../../data/firewall/rules RULE $rule '$SUSPENDED' no
+update_object_value '../../../data/firewall/rules' 'RULE' "$rule" '$SUSPENDED' "no"
 
 # Updating system firewall
 $BIN/v-update-firewall
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 # Logging
+$BIN/v-log-action "system" "Info" "Firewall" "Unsuspended firewall rule (Rule: $rule)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

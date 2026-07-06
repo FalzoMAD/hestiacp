@@ -2,11 +2,12 @@
 # info: Suspending sys cron jobs
 # options: USER [RESTART]
 #
-# The function suspends all user cron jobs.
-
+# example: v-suspend-cron-jobs admin
+#
+# This function suspends all user cron jobs.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -14,21 +15,23 @@ user=$1
 restart=$2
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER'
-is_format_valid 'user'
+check_args '1' "$#" 'USER [RESTART]'
+is_format_valid 'user' 'restart'
 is_object_valid 'user' 'USER' "$user"
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
-
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -36,17 +39,16 @@ check_hestia_demo_mode
 
 # Suspendn all jobs
 for job in $(search_objects 'cron' 'SUSPENDED' 'no' 'JOB'); do
-    $BIN/v-suspend-cron-job $user $job 'no'
+	$BIN/v-suspend-cron-job "$user" "$job" 'no'
 done
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 # Restarting crond
-$BIN/v-restart-cron $restart
-check_result $? "Cron restart failed" >/dev/null
+$BIN/v-restart-cron "$restart"
+check_result $? "Cron restart failed" > /dev/null
 
 # Logging
 log_event "$OK" "$ARGUMENTS"

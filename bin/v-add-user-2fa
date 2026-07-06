@@ -2,20 +2,24 @@
 # info: add 2fa to existing user
 # options: USER
 #
-# The function creates a new 2fa token for user.
-
+# example: v-add-user-2fa admin
+#
+# This function creates a new 2fa token for user.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 user=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -28,7 +32,6 @@ is_object_valid 'user' 'USER' "$user"
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -37,13 +40,13 @@ check_hestia_demo_mode
 source $USER_DATA/user.conf
 
 # Check if 2FA is already enabled
-if [ ! -z "$TWOFA" ]; then
-    echo "Error: 2FA already enabled"
-    exit $E_EXIST
+if [ -n "$TWOFA" ]; then
+	echo "Error: 2FA already enabled"
+	exit "$E_EXISTS"
 fi
 
-# Get secret and qr code from 2fa libary
-data=$($HESTIA/php/bin/php $HESTIA/web/inc/2fa/secret.php)
+# Get secret and qr code from 2fa library
+data=$($HESTIA_PHP $HESTIA/web/inc/2fa/secret.php)
 
 # Split to secret and qrcode using delimiter
 IFS='-' read -r -a array <<< "$data"
@@ -51,8 +54,8 @@ secret=${array[0]}
 qrcode=${array[1]}
 
 # Save the secret in user config (needs encryption?)
-sed -i "/RKEY/a TWOFA='$secret'" $USER_DATA/user.conf
-sed -i "/TWOFA/a QRCODE='$qrcode'" $USER_DATA/user.conf
+update_user_value "$user" '$TWOFA' "$secret"
+update_user_value "$user" '$QRCODE' "$qrcode"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

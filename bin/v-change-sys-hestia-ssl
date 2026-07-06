@@ -2,11 +2,12 @@
 # info: change hestia ssl certificate
 # options: SSL_DIR [RESTART]
 #
-# The function changes hestia SSL certificate and the key.
-
+# example: v-change-sys-hestia-ssl /home/new/dir/path yes
+#
+# This function changes hestia SSL certificate and the key.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -15,47 +16,49 @@ ssl_dir=$1
 restart=$2
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
 check_args '1' "$#" 'SSL_DIR [RESTART]'
-is_format_valid 'ssl_dir'
+is_format_valid 'ssl_dir restart'
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
-
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 # Checking new certificate
-certificate=$(cat $ssl_dir/$domain.crt |grep -n END)
-certificate_count=$(echo "$certificate" |wc -l)
+certificate=$(cat $ssl_dir/$domain.crt | grep -n END)
+certificate_count=$(echo "$certificate" | wc -l)
 if [ "$certificate_count" -gt 1 ]; then
-    crt_end=$(echo "$certificate" |head -n1 |cut -f 1 -d :)
-    crt_lines=$(wc -l $ssl_dir/$domain.crt |cut -f1 -d ' ')
-    pem_begin=$((crt_lines - crt_end))
-    mv $ssl_dir/$domain.crt $ssl_dir/$domain.crt_full
-    head -n $crt_end $ssl_dir/$domain.crt_full > $ssl_dir/$domain.crt
-    tail -n $pem_begin $ssl_dir/$domain.crt_full > $ssl_dir/$domain.ca
-    is_web_domain_cert_valid
-    mv -f $ssl_dir/$domain.crt_full $ssl_dir/$domain.crt
-    rm -f $ssl_dir/$domain.ca
+	crt_end=$(echo "$certificate" | head -n1 | cut -f 1 -d :)
+	crt_lines=$(wc -l $ssl_dir/$domain.crt | cut -f1 -d ' ')
+	pem_begin=$((crt_lines - crt_end))
+	mv $ssl_dir/$domain.crt $ssl_dir/$domain.crt_full
+	head -n $crt_end $ssl_dir/$domain.crt_full > $ssl_dir/$domain.crt
+	tail -n $pem_begin $ssl_dir/$domain.crt_full > $ssl_dir/$domain.ca
+	is_web_domain_cert_valid
+	mv -f $ssl_dir/$domain.crt_full $ssl_dir/$domain.crt
+	rm -f $ssl_dir/$domain.ca
 else
-    is_web_domain_cert_valid
+	is_web_domain_cert_valid
 fi
 
 # Adding new certificate
 cp -f $ssl_dir/certificate.crt $HESTIA/ssl/certificate.crt
 cp -f $ssl_dir/certificate.key $HESTIA/ssl/certificate.key
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
@@ -63,8 +66,8 @@ cp -f $ssl_dir/certificate.key $HESTIA/ssl/certificate.key
 
 # Restarting web server
 if [ "$restart" != 'no' ]; then
-    kill -HUP $(cat /var/run/hestia-nginx.pid)
-    $BIN/v-restart-mail $restart
+	kill -HUP $(cat /run/hestia-nginx.pid)
+	$BIN/v-restart-mail "$restart"
 fi
 
 # Logging

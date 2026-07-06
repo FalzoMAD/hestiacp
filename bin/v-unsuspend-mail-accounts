@@ -2,11 +2,12 @@
 # info: unsuspend all mail domain accounts
 # options: USER DOMAIN
 #
-# The function unsuspends all mail domain accounts.
-
+# example: v-unsuspend-mail-accounts admin acme.com
+#
+# This function unsuspends all mail domain accounts.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -15,14 +16,17 @@ domain=$2
 domain_idn=$2
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 # Additional argument formatting
 format_domain
 format_domain_idn
 # TODO: $domain_idn not used in this script - maybe $domain should be converted to $doman_idn ?
-
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -36,6 +40,8 @@ is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'mail' 'DOMAIN' "$domain"
 is_object_unsuspended 'mail' 'DOMAIN' "$domain"
 
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -43,15 +49,11 @@ is_object_unsuspended 'mail' 'DOMAIN' "$domain"
 
 # Starting unsuspend loop
 for account in $(search_objects "mail/$domain" 'SUSPENDED' 'yes' 'ACCOUNT'); do
-    $BIN/v-unsuspend-mail-account "$user" "$domain" "$account"
+	$BIN/v-unsuspend-mail-account "$user" "$domain" "$account"
 done
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
-
-# No Logging
-#log_event "$OK" "$ARGUMENTS"
 
 exit

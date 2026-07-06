@@ -2,11 +2,12 @@
 # info: delete mail account autoreply message
 # options: USER DOMAIN ACCOUNT ALIAS
 #
-# The function delete email account autoreply.
-
+# example: v-delete-mail-account-autoreply admin mydomain.tld bob
+#
+# This function deletes an email accounts autoreply.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
@@ -17,15 +18,19 @@ account=$3
 malias=$4
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
-source $HESTIA/conf/hestia.conf
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 # Additional argument formatting
 format_domain
 format_domain_idn
 # TODO: $domain_idn not used in this script - maybe $domain should be converted to $doman_idn ?
-
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -35,16 +40,12 @@ check_args '3' "$#" 'USER DOMAIN ACCOUNT'
 is_format_valid 'user' 'domain' 'account'
 is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
-is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'mail' 'DOMAIN' "$domain"
-is_object_unsuspended 'mail' 'DOMAIN' "$domain"
 is_object_valid "mail/$domain" 'ACCOUNT' "$account"
-is_object_unsuspended "mail/$domain" 'ACCOUNT' "$account"
 is_object_value_exist "mail/$domain" 'ACCOUNT' "$account" '$AUTOREPLY'
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
-
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -52,9 +53,8 @@ check_hestia_demo_mode
 
 # Deleting exim autoreply message
 if [[ "$MAIL_SYSTEM" =~ exim ]]; then
-    rm -f $HOMEDIR/$user/conf/mail/$domain/autoreply.$account.msg
+	rm -f $HOMEDIR/$user/conf/mail/$domain/autoreply.$account.msg
 fi
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
@@ -64,10 +64,10 @@ fi
 rm -f $USER_DATA/mail/$domain/$account@$domain.msg
 
 # Update config
-update_object_value "mail/$domain" 'ACCOUNT' "$account"  '$AUTOREPLY' 'no'
+update_object_value "mail/$domain" 'ACCOUNT' "$account" '$AUTOREPLY' 'no'
 
 # Logging
-log_history "$ARGUMENTS"
+$BIN/v-log-action "$user" "Info" "Mail" "Mail account auto-reply removed (User: $account@$domain)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

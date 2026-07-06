@@ -2,20 +2,24 @@
 # info: suspend firewall rule
 # options: RULE
 #
-# The function suspends a certain firewall rule.
-
+# example: v-suspend-firewall-rule 7
+#
+# This function suspends a certain firewall rule.
 
 #----------------------------------------------------------#
-#                    Variable&Function                     #
+#                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
 rule=$1
 
 # Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
-source $HESTIA/conf/hestia.conf
-
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -24,29 +28,28 @@ source $HESTIA/conf/hestia.conf
 check_args '1' "$#" 'RULE'
 is_format_valid 'rule'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
-is_object_valid '../../data/firewall/rules' 'RULE' "$rule"
-is_object_unsuspended '../../data/firewall/rules' 'RULE' "$rule"
+is_object_valid '../../../data/firewall/rules' 'RULE' "$rule"
+is_object_unsuspended '../../../data/firewall/rules' 'RULE' "$rule"
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
-
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 # Suspending rule
-update_object_value ../../data/firewall/rules RULE $rule '$SUSPENDED' yes
+update_object_value '../../../data/firewall/rules' 'RULE' "$rule" '$SUSPENDED' yes
 
 # Updating system firewall
 $BIN/v-update-firewall
-
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 # Logging
+$BIN/v-log-action "system" "Info" "Firewall" "Suspended firewall rule (Rule: $rule)."
 log_event "$OK" "$ARGUMENTS"
 
 exit
